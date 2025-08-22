@@ -132,10 +132,9 @@ def train_catboost_model(config_path: str = "config.yaml") -> Dict[str, Any]:
         "config": config,
         "training_data_shape": X_train_str.shape,
         "test_data_shape": X_test_str.shape,
+        "best_iteration": trained_model.best_iteration_,
+        "best_score": float(trained_model.best_score_["validation"]["Accuracy"]),
     }
-
-    logger.info("CatBoost training pipeline completed successfully")
-    logger.info(f"Model saved to: {saved_paths['final_model_pkl']}")
 
     return training_results
 
@@ -177,7 +176,7 @@ def main() -> None:
         # Train model
         train_catboost_model()
 
-        logger.info("Training pipeline test completed successfully")
+        logger.info("Training pipeline test completed successfully!")
 
     except Exception as error:
         logger.error(f"Training pipeline test failed: {error}")

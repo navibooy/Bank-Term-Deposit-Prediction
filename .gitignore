@@ -208,3 +208,7 @@ __marimo__/
 
 # Raw Data
 data/raw/
+
+# MLFlow runs and artifacts
+mlruns/
+mlartifacts/
