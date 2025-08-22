@@ -1,0 +1,115 @@
+model:
+  catboost:
+    # Core hyperparameters
+    n_estimators: 5
+    learning_rate: 0.1
+    max_depth: 6
+    l2_leaf_reg: 3
+    random_state: 42
+
+    # CatBoost specific parameters
+    loss_function: 'CrossEntropy'
+    eval_metric: 'AUC'
+    use_best_model: true
+    early_stopping_rounds: 200
+    verbose: 500
+    allow_writing_files: false
+    task_type: 'CPU'
+
+# Training configuration
+training:
+  cv_folds: 5
+  random_state: 42
+  shuffle: true
+
+  # Validation thresholds for model promotion
+  validation_thresholds:
+    min_roc_auc: 0.80
+    min_accuracy: 0.75
+    max_cv_std: 0.05
+
+# Data configuration
+data:
+  raw_dir: 'data/raw'
+  processed_dir: 'data/processed'
+  models_dir: 'models'
+
+  # Data ingestion
+  dataset_type: 'train'
+  target_column: 'y'
+
+  # Feature engineering
+  test_size: 0.2
+  stratify: true
+
+# MLflow configuration
+mlflow:
+  tracking_uri: 'http://localhost:5000'
+  experiment_name: 'bank-marketing-catboost'
+
+  # Artifact logging
+  log_artifacts: true
+  log_shap_plots: true
+  log_feature_importance: true
+
+# FastAPI configuration
+api:
+  host: '0.0.0.0'
+  port: 8000
+  title: 'Bank Marketing Prediction API'
+  description: 'ML API for predicting bank term deposit subscriptions'
+  version: '1.0.0'
+
+# Airflow configuration
+airflow:
+  # DAG scheduling
+  training_schedule: '@daily'
+  drift_check_schedule: '@hourly'
+
+  # Task configuration
+  retries: 2
+  retry_delay_minutes: 5
+
+  # Email alerts (optional)
+  email_on_failure: false
+  email_on_retry: false
+  email: ['your-email@example.com']
+
+# Drift detection configuration
+drift:
+  # Evidently AI settings
+  reference_data_path: 'data/reference.parquet'
+  current_data_path: 'data/current'
+
+  # Drift thresholds
+  data_drift_threshold: 0.05
+  target_drift_threshold: 0.05
+
+  # Simulation parameters for testing
+  noise_level: 0.1
+  label_flip_probability: 0.05
+
+# Logging configuration
+logging:
+  level: 'INFO'
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+
+  # File logging (optional)
+  log_to_file: false
+  log_file_path: 'logs/pipeline.log'
+
+# Environment configuration
+environment:
+  # Development/Production flags
+  debug: false
+  testing: false
+
+  # Resource limits
+  max_memory_gb: 8
+  max_cpu_cores: 4
+
+  # Docker configuration
+  docker:
+    postgres_db: 'mlflow_db'
+    postgres_user: 'mlflow_user'
+    postgres_password: 'mlflow_password'
