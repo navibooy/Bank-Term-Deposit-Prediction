@@ -318,7 +318,7 @@ dev = [
 requires-dist = [
     { name = "apache-airflow", specifier = "==3.0.4" },
     { name = "catboost", specifier = "==1.2.8" },
-    { name = "evidently", specifier = "==0.7.12" },
+    { name = "evidently", specifier = "==0.7.11" },
     { name = "fastapi", specifier = "==0.116.1" },
     { name = "kaggle", specifier = "==1.7.4.5" },
     { name = "matplotlib", specifier = "==3.10.5" },
@@ -945,7 +945,7 @@ wheels = [
 
 [[package]]
 name = "evidently"
-version = "0.7.12"
+version = "0.7.11"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
@@ -975,9 +975,9 @@ dependencies = [
     { name = "uvicorn", extra = ["standard"] },
     { name = "watchdog" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/60/53/5f086c8754964f31678dea4d9b9e4ffb65ed489d0954c7194c42cb67d07f/evidently-0.7.12.tar.gz", hash = "sha256:34ac8f21e573beb65105581d89a317a1ed5536f253dd920509d365e0b1137986", size = 4008585, upload-time = "2025-08-05T21:16:12.383Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e2/c5/e52d64b3603558b33d8c8d189d21f019d76637b0171a0d9af8ba563b0f0f/evidently-0.7.11.tar.gz", hash = "sha256:d49cb381b0be651307dee0a9a00b5e4980e52e42932b6dcaf5adba487fa3852e", size = 3907615, upload-time = "2025-07-18T21:23:54.172Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/07/e4/213127213db8802a8a496a5100b5fb94d1300197dc313c2fb742046df5ce/evidently-0.7.12-py3-none-any.whl", hash = "sha256:fee234c675e9135683f9f9293ea6aba34fd4910b3c27147910fa315878a72f91", size = 5408255, upload-time = "2025-08-05T21:16:10.521Z" },
+    { url = "https://files.pythonhosted.org/packages/93/45/d64956a90c02ce5d7dcbadcdda86a75374c827402f732c19b7a5c4f9123d/evidently-0.7.11-py3-none-any.whl", hash = "sha256:80bad07774fd4c7f53cf26515ae9e8076502977510a296e2ec9fdad5a9b3ffdd", size = 5257854, upload-time = "2025-07-18T21:23:52.27Z" },
 ]
 
 [[package]]

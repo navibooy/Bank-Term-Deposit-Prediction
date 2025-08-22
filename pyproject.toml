@@ -7,7 +7,7 @@ requires-python = ">=3.10"
 dependencies = [
     "apache-airflow==3.0.4",
     "catboost==1.2.8",
-    "evidently==0.7.12",
+    "evidently==0.7.11",
     "fastapi==0.116.1",
     "kaggle==1.7.4.5",
     "matplotlib==3.10.5",

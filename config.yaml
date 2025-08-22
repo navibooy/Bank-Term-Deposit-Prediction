@@ -1,3 +1,6 @@
+# MLOps Project Configuration
+random_state: 42
+
 model:
   catboost:
     # Core hyperparameters
@@ -33,6 +36,8 @@ data:
   raw_dir: 'data/raw'
   processed_dir: 'data/processed'
   models_dir: 'models'
+  reference_dir: 'data/reference'
+  current_dir: 'data/current'
 
   # Data ingestion
   dataset_type: 'train'
@@ -51,6 +56,7 @@ mlflow:
   log_artifacts: true
   log_shap_plots: true
   log_feature_importance: true
+  log_drift_reports: true
 
 # FastAPI configuration
 api:
@@ -65,6 +71,7 @@ airflow:
   # DAG scheduling
   training_schedule: '@daily'
   drift_check_schedule: '@hourly'
+  deployment_schedule: null  # Triggered by training completion
 
   # Task configuration
   retries: 2
@@ -75,11 +82,112 @@ airflow:
   email_on_retry: false
   email: ['your-email@example.com']
 
-# Drift detection configuration
+# Comprehensive Drift Detection Configuration
 drift:
+  # Reference dataset configuration
+  reference_data:
+    path: 'data/reference/reference.parquet'
+    auto_generate: true  # Generate from training data if not exists
+
+  # Current batch configuration for monitoring
+  current_batch:
+    output_path: 'data/current/current_batch.parquet'
+    batch_size: 500
+    apply_drift: false  # Set to true for testing drift scenarios
+
+  # Drift thresholds for alerts
+  thresholds:
+    data_drift_p_value: 0.05
+    target_drift_p_value: 0.05
+    feature_drift_threshold: 0.1
+
+  # Bank marketing specific feature mappings
+  features:
+    numerical:
+      - 'age'
+      - 'balance'
+      - 'duration'
+      - 'campaign'
+      - 'pdays'
+      - 'previous'
+    categorical:
+      - 'job'
+      - 'marital'
+      - 'education'
+      - 'default'
+      - 'housing'
+      - 'loan'
+      - 'contact'
+      - 'day'
+      - 'month'
+      - 'poutcome'
+
+  # Drift simulation scenarios for testing
+  scenarios:
+    severe_data_drift:
+      description: "Significant distribution changes requiring immediate action"
+      data_drift:
+        target_column: 'y'
+        numerical_drift:
+          age:
+            type: "gaussian_noise"
+            noise_std: 0.6
+            description: "Major demographic shift"
+          balance:
+            type: "shift_mean"
+            shift_factor: 0.5
+            description: "Economic conditions affecting customer balances"
+          duration:
+            type: "outlier_injection"
+            outlier_percentage: 0.4
+            description: "System issues causing call duration anomalies"
+        categorical_drift:
+          job:
+            type: "category_shift"
+            shift_percentage: 0.3
+            description: "Employment sector changes"
+          marital:
+            type: "category_shift"
+            shift_percentage: 0.3
+            description: "Marital status distribution changes"
+
+    concept_drift:
+      description: "Changes in customer behavior patterns"
+      concept_drift:
+        target_column: 'y'
+        concept_drift_type: "label_flip"
+        label_flip_percentage: 0.25
+        description: "Customer subscription behavior changes due to market conditions"
+
+# Evidently AI Report Configuration
+evidently:
+  reports:
+    data_drift:
+      enabled: true
+      save_path: 'reports/data_drift.html'
+      presets: ['DataDriftPreset']
+    target_drift:
+      enabled: true
+      save_path: 'reports/target_drift.html'
+      presets: ['TargetDriftPreset']
+    data_quality:
+      enabled: true
+      save_path: 'reports/data_quality.html'
+      presets: ['DataQualityPreset']
+    classification_performance:
+      enabled: true
+      save_path: 'reports/classification_performance.html'
+      presets: ['ClassificationPreset']
+
+  # Report generation settings
+  reference_period: 30  # days
+  current_period: 7     # days
+
+# Original drift configuration (legacy, kept for backward compatibility)
+drift_legacy:
   # Evidently AI settings
-  reference_data_path: 'data/reference.parquet'
-  current_data_path: 'data/current'
+  reference_data_path: 'data/reference/reference.parquet'
+  current_data_path: 'data/current/current_batch.parquet'
 
   # Drift thresholds
   data_drift_threshold: 0.05
@@ -113,3 +221,35 @@ environment:
     postgres_db: 'mlflow_db'
     postgres_user: 'mlflow_user'
     postgres_password: 'mlflow_password'
+
+# Deployment configuration
+deployment:
+  model_registry:
+    champion_model_name: 'bank-marketing-champion'
+    challenger_model_name: 'bank-marketing-challenger'
+
+  promotion_criteria:
+    min_accuracy_improvement: 0.02
+    min_auc_improvement: 0.01
+    max_performance_degradation: 0.05
+
+  api_reload:
+    enabled: true
+    reload_endpoint: 'http://fastapi:8000/reload'
+
+# Monitoring configuration
+monitoring:
+  drift_detection:
+    enabled: true
+    check_frequency: '@hourly'
+    alert_channels: ['log', 'email']  # Can add 'slack', 'teams'
+
+  model_performance:
+    enabled: true
+    performance_threshold: 0.75
+    alert_on_degradation: true
+
+  data_quality:
+    enabled: true
+    missing_data_threshold: 0.1
+    duplicate_threshold: 0.05
