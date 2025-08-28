@@ -18,7 +18,6 @@ services:
     ports:
       - "5000:5000"
     healthcheck:
-      # Use Python so we don't rely on curl existing in the image
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/'); print('ok')\""]
       interval: 10s
       timeout: 5s
@@ -52,22 +51,19 @@ services:
       - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      # shared secrets (same in scheduler)
       - AIRFLOW__WEBSERVER__SECRET_KEY=super-secret-please-change-me
       - AIRFLOW__CORE__FERNET_KEY=R8o2e1uF8C2e0b8lT1s6t4m3X9o2Y3q5c6m0a1Z2b3Q=
-      # integrations
       - MLFLOW_TRACKING_URI=http://mlflow:5000
-      # config path for your code (and we also mount into /opt/airflow/dags below)
       - CONFIG_PATH=/opt/airflow/config.yaml
     volumes:
       - ../dags:/opt/airflow/dags
       - ../data:/opt/airflow/data
       - ../reports:/opt/airflow/reports
       - ../src:/opt/airflow/src
-      # mount config in TWO places: your code can read CONFIG_PATH and
-      # any code that uses plain "config.yaml" from DAGS_FOLDER will also find it
       - ../config.yaml:/opt/airflow/config.yaml:ro
       - ../config.yaml:/opt/airflow/dags/config.yaml:ro
+      # Mount Kaggle credentials
+      - C:/Users/juan_/Documents/Bank-Term-Deposit-Prediction/.kaggle:/home/airflow/.kaggle:ro
     ports:
       - "8081:8080"
     depends_on:
@@ -93,7 +89,6 @@ services:
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      # same secrets as webserver
       - AIRFLOW__WEBSERVER__SECRET_KEY=super-secret-please-change-me
       - AIRFLOW__CORE__FERNET_KEY=R8o2e1uF8C2e0b8lT1s6t4m3X9o2Y3q5c6m0a1Z2b3Q=
       - MLFLOW_TRACKING_URI=http://mlflow:5000
@@ -105,6 +100,8 @@ services:
       - ../src:/opt/airflow/src
       - ../config.yaml:/opt/airflow/config.yaml:ro
       - ../config.yaml:/opt/airflow/dags/config.yaml:ro
+      # Mount Kaggle credentials
+      - ../.kaggle:/root/.kaggle:ro 
     depends_on:
       postgres:
         condition: service_healthy
@@ -129,6 +126,8 @@ services:
     volumes:
       - ../src:/app/src
       - ../config.yaml:/app/config.yaml:ro
+      # Mount Kaggle credentials if you need Kaggle access inside FastAPI
+      - ../.kaggle:/root/.kaggle:ro 
     depends_on:
       mlflow:
         condition: service_healthy
