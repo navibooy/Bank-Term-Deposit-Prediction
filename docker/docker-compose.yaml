@@ -1,0 +1,153 @@
+services:
+  mlflow:
+    build:
+      context: ..          # project root
+      dockerfile: docker/mlflow.Dockerfile
+    container_name: mlflow
+    environment:
+      - MLFLOW_BACKEND_STORE_URI=sqlite:////mlruns/mlflow.db
+      - MLFLOW_ARTIFACT_ROOT=/mlruns
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri sqlite:////mlruns/mlflow.db
+      --default-artifact-root /mlruns
+    volumes:
+      - ../mlruns:/mlruns
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/'); print('ok')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:14
+    container_name: airflow-postgres
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow -d airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  airflow-webserver:
+    build:
+      context: ..          # project root
+      dockerfile: docker/airflow.Dockerfile
+    container_name: airflow-webserver
+    environment:
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__WEBSERVER__SECRET_KEY=super-secret-please-change-me
+      - AIRFLOW__CORE__FERNET_KEY=R8o2e1uF8C2e0b8lT1s6t4m3X9o2Y3q5c6m0a1Z2b3Q=
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - CONFIG_PATH=/opt/airflow/config.yaml
+      # Kaggle via env vars
+      - KAGGLE_USERNAME=${KAGGLE_USERNAME}
+      - KAGGLE_KEY=${KAGGLE_KEY}
+    volumes:
+      - ../dags:/opt/airflow/dags
+      - ../data:/opt/airflow/data
+      - ../reports:/opt/airflow/reports
+      - ../src:/opt/airflow/src
+      - ../config.yaml:/opt/airflow/config.yaml:ro
+      - ../config.yaml:/opt/airflow/dags/config.yaml:ro
+      - ../mlruns:/mlruns                       # ← ensure Airflow can write MLflow artifacts
+      # OPTIONAL (Windows-friendly) file-based Kaggle creds:
+      # - ../.kaggle:/home/airflow/.kaggle:ro
+      # OPTIONAL: mount logs locally for easier debugging:
+      # - ../logs:/opt/airflow/logs
+    ports:
+      - "8081:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+    restart: unless-stopped
+    command: >
+      bash -lc "
+      airflow db upgrade || airflow db init;
+      airflow users create --username admin --firstname Admin --lastname User
+        --role Admin --email admin@example.com --password admin || true;
+      exec airflow webserver
+      "
+
+  airflow-scheduler:
+    build:
+      context: ..          # project root
+      dockerfile: docker/airflow.Dockerfile
+    container_name: airflow-scheduler
+    environment:
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__WEBSERVER__SECRET_KEY=super-secret-please-change-me
+      - AIRFLOW__CORE__FERNET_KEY=R8o2e1uF8C2e0b8lT1s6t4m3X9o2Y3q5c6m0a1Z2b3Q=
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - CONFIG_PATH=/opt/airflow/config.yaml
+      # Kaggle via env vars
+      - KAGGLE_USERNAME=${KAGGLE_USERNAME}
+      - KAGGLE_KEY=${KAGGLE_KEY}
+    volumes:
+      - ../dags:/opt/airflow/dags
+      - ../data:/opt/airflow/data
+      - ../reports:/opt/airflow/reports
+      - ../src:/opt/airflow/src
+      - ../config.yaml:/opt/airflow/config.yaml:ro
+      - ../config.yaml:/opt/airflow/dags/config.yaml:ro
+      - ../mlruns:/mlruns                       # ← match mlflow artifact root
+      # OPTIONAL: file-based Kaggle creds:
+      # - ../.kaggle:/home/airflow/.kaggle:ro
+      # OPTIONAL: local logs
+      # - ../logs:/opt/airflow/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+      airflow-webserver:
+        condition: service_started
+    restart: unless-stopped
+    command: >
+      bash -lc "exec airflow scheduler"
+
+  fastapi:
+    build:
+      context: ..          # project root
+      dockerfile: docker/fastapi.Dockerfile
+    container_name: fastapi
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - CONFIG_PATH=/app/config.yaml
+      # Kaggle via env vars (if FastAPI needs Kaggle)
+      - KAGGLE_USERNAME=${KAGGLE_USERNAME}
+      - KAGGLE_KEY=${KAGGLE_KEY}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../src:/app/src
+      - ../config.yaml:/app/config.yaml:ro
+      # OPTIONAL: file-based Kaggle creds
+      - ../.kaggle:/root/.kaggle:ro
+      - ../mlruns:/mlruns
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
