@@ -10,9 +10,11 @@ COPY src/ /opt/airflow/src
 # Make src importable
 ENV PYTHONPATH="/opt/airflow:${PYTHONPATH}"
 
-# Install ONLY the extras needed by DAG tasks (not apache-airflow)
-# (versions match your pyproject to avoid surprises)
-RUN pip install --no-cache-dir \
+# Switch to airflow user BEFORE installing extras
+USER airflow
+
+# Install only the dependencies you need for your DAGs
+RUN pip install --user --no-cache-dir \
     catboost==1.2.8 \
     evidently==0.7.11 \
     fastapi==0.116.1 \
@@ -28,5 +30,3 @@ RUN pip install --no-cache-dir \
 
 # Optional: avoid Airflow example DAGs
 ENV AIRFLOW__CORE__LOAD_EXAMPLES=False
-
-USER airflow

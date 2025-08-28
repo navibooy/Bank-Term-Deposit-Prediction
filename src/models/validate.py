@@ -329,7 +329,7 @@ def log_to_mlflow(
 def validate_model(
     model_path: str = "models/catboost_model.pkl", config_path: str = "config.yaml"
 ) -> Dict[str, Any]:
-    """Main model validation pipeline."""
+    """Main model validation pipeline with metrics, plots, thresholds, and drift detection."""
     logger.info("Starting model validation pipeline")
 
     # Load configuration
@@ -340,12 +340,10 @@ def validate_model(
 
     # Load trained model
     from src.models.train import load_trained_model
-
     model = load_trained_model(model_path)
 
     # Load processed data
     from src.features.transform import load_processed_data
-
     X_train, X_test, y_train, y_test = load_processed_data()
 
     # Convert to string for CatBoost (same as training)
@@ -388,7 +386,7 @@ def validate_model(
     # Log to MLflow
     log_to_mlflow(model, metrics, validation_results, plot_paths, config)
 
-    # Prepare validation summary
+    # Prepare validation summary (before drift)
     validation_summary = {
         "metrics": metrics,
         "validation_results": validation_results,
@@ -403,8 +401,33 @@ def validate_model(
 
     logger.info(f"Final ROC-AUC: {metrics['roc_auc']:.5f}")
 
-    return validation_summary
+    # === DRIFT DETECTION ===
+    try:
+        from src.monitoring.generate_drift import DriftReportGenerator
 
+        generator = DriftReportGenerator()
+        reference_path = "data/reference/reference.parquet"
+        current_path = "data/current/current_batch.parquet"
+        target_column = "y"
+
+        if Path(reference_path).exists() and Path(current_path).exists():
+            drift_results = generator.generate_all_reports(
+                reference_path=reference_path,
+                current_path=current_path,
+                target_column=target_column,
+            )
+
+            validation_summary["drift_results"] = drift_results["drift_results"]
+            validation_summary["drift_report_paths"] = drift_results["report_paths"]
+
+            logger.info("Drift reports generated and logged to MLflow")
+        else:
+            logger.warning("Drift detection skipped: missing reference/current datasets")
+
+    except Exception as e:
+        logger.warning(f"Drift detection failed: {e}")
+
+    return validation_summary
 
 def main() -> None:
     """Test the validation pipeline."""
