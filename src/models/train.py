@@ -1,5 +1,5 @@
 #MLFlow Requirements
-import os
+import os, re
 from datetime import datetime
 import mlflow
 import mlflow.catboost
@@ -24,6 +24,44 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+def resolve_mlflow_uri(val: str) -> str:
+    """
+    Resolve MLflow tracking URI from config values like:
+      ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+    Handles both Docker (mlflow hostname) and host machine (localhost).
+    """
+    import os, re, socket
+
+    if not isinstance(val, str):
+        return val
+
+    resolved = val
+
+    # Case 1: pattern ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+    m = re.match(r"\$\{([^:}]+):-([^}]+)\}", val)
+    if m:
+        env_key, default_val = m.groups()
+        resolved = os.getenv(env_key, default_val)
+
+    # Case 2: just ${MLFLOW_TRACKING_URI}
+    elif val.startswith("${") and val.endswith("}"):
+        env_key = val[2:-1]
+        resolved = os.getenv(env_key, "")
+
+    # Case 3: already plain http
+    elif val.startswith("http"):
+        resolved = val
+
+    # Now handle hostname `mlflow`
+    if "://mlflow" in resolved:
+        try:
+            # If we can resolve "mlflow", keep it (inside Docker network)
+            socket.gethostbyname("mlflow")
+        except socket.gaierror:
+            # If not resolvable (on host), rewrite to localhost
+            resolved = resolved.replace("://mlflow", "://localhost")
+
+    return resolved
 
 def load_config(config_path: str = "config.yaml") -> Dict[str, Any]:
     """Load configuration from YAML file."""
@@ -39,15 +77,11 @@ def load_config(config_path: str = "config.yaml") -> Dict[str, Any]:
         logger.error(f"Failed to load config file {config_path}: {error}")
 
 #MLFlow Requirements
-def setup_mlflow(cfg: Dict[str, Any]) -> None:
-    """Configure MLflow tracking from config/env variables."""
-    import mlflow  # import inside if you prefer
-
-    # Prefer env var if present, fallback to config.yaml
-    tracking_uri = os.getenv("MLFLOW_TRACKING_URI", cfg["mlflow"]["tracking_uri"])
+def setup_mlflow(cfg: dict):
+    tracking_uri = resolve_mlflow_uri(cfg["mlflow"]["tracking_uri"])
+    logger.info(f"Resolved MLflow tracking URI → {tracking_uri}")
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(cfg["mlflow"]["experiment_name"])
-
 
 def create_catboost_model(
     config: Dict[str, Any], categorical_features: list[str]

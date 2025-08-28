@@ -1,10 +1,8 @@
-version: "3.9"
-
 services:
   mlflow:
     build:
-      context: .
-      dockerfile: docker/mlflow.Dockerfile
+      context: .                 # relative to docker/
+      dockerfile: mlflow.Dockerfile
     container_name: mlflow
     environment:
       - MLFLOW_BACKEND_STORE_URI=sqlite:////mlruns/mlflow.db
@@ -13,10 +11,10 @@ services:
       mlflow server
       --host 0.0.0.0
       --port 5000
-      --backend-store-uri ${MLFLOW_BACKEND_STORE_URI}
-      --default-artifact-root ${MLFLOW_ARTIFACT_ROOT}
+      --backend-store-uri sqlite:////mlruns/mlflow.db
+      --default-artifact-root /mlruns
     volumes:
-      - ./mlruns:/mlruns
+      - ../mlruns:/mlruns        # maps project-root/mlruns into container
     ports:
       - "5000:5000"
     restart: unless-stopped
@@ -24,16 +22,18 @@ services:
   airflow:
     build:
       context: .
-      dockerfile: docker/airflow.Dockerfile
+      dockerfile: airflow.Dockerfile
     container_name: airflow
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
     ports:
-      - "8080:8080"   # Airflow UI
+      - "8080:8080"              # Airflow UI
     volumes:
-      - ./dags:/opt/airflow/dags
-      - ./data:/opt/airflow/data
-      - ./reports:/opt/airflow/reports
+      - ../dags:/opt/airflow/dags
+      - ../data:/opt/airflow/data
+      - ../reports:/opt/airflow/reports
+      - ../src:/opt/airflow/src  # allow DAGs to import project code
     depends_on:
       - mlflow
     restart: unless-stopped
@@ -41,12 +41,15 @@ services:
   fastapi:
     build:
       context: .
-      dockerfile: docker/fastapi.Dockerfile
+      dockerfile: fastapi.Dockerfile
     container_name: fastapi
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
     ports:
-      - "8000:8000"   # FastAPI app
+      - "8000:8000"              # FastAPI API
+    volumes:
+      - ../src:/app/src
+      - ../config.yaml:/app/config.yaml:ro
     depends_on:
       - mlflow
     restart: unless-stopped
