@@ -212,3 +212,9 @@ data/raw/
 # MLFlow runs and artifacts
 mlruns/
 mlartifacts/
+
+# Kaggle credentials
+.kaggle/
+kaggle.json
+
+docker/.env

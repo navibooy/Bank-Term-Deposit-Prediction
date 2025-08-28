@@ -55,6 +55,9 @@ services:
       - AIRFLOW__CORE__FERNET_KEY=R8o2e1uF8C2e0b8lT1s6t4m3X9o2Y3q5c6m0a1Z2b3Q=
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - CONFIG_PATH=/opt/airflow/config.yaml
+      # Kaggle via env vars
+      - KAGGLE_USERNAME=${KAGGLE_USERNAME}
+      - KAGGLE_KEY=${KAGGLE_KEY}
     volumes:
       - ../dags:/opt/airflow/dags
       - ../data:/opt/airflow/data
@@ -62,8 +65,11 @@ services:
       - ../src:/opt/airflow/src
       - ../config.yaml:/opt/airflow/config.yaml:ro
       - ../config.yaml:/opt/airflow/dags/config.yaml:ro
-      # Mount Kaggle credentials
-      - C:/Users/juan_/Documents/Bank-Term-Deposit-Prediction/.kaggle:/home/airflow/.kaggle:ro
+      - ../mlruns:/mlruns                       # ← ensure Airflow can write MLflow artifacts
+      # OPTIONAL (Windows-friendly) file-based Kaggle creds:
+      # - ../.kaggle:/home/airflow/.kaggle:ro
+      # OPTIONAL: mount logs locally for easier debugging:
+      # - ../logs:/opt/airflow/logs
     ports:
       - "8081:8080"
     depends_on:
@@ -93,6 +99,9 @@ services:
       - AIRFLOW__CORE__FERNET_KEY=R8o2e1uF8C2e0b8lT1s6t4m3X9o2Y3q5c6m0a1Z2b3Q=
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - CONFIG_PATH=/opt/airflow/config.yaml
+      # Kaggle via env vars
+      - KAGGLE_USERNAME=${KAGGLE_USERNAME}
+      - KAGGLE_KEY=${KAGGLE_KEY}
     volumes:
       - ../dags:/opt/airflow/dags
       - ../data:/opt/airflow/data
@@ -100,8 +109,11 @@ services:
       - ../src:/opt/airflow/src
       - ../config.yaml:/opt/airflow/config.yaml:ro
       - ../config.yaml:/opt/airflow/dags/config.yaml:ro
-      # Mount Kaggle credentials
-      - ../.kaggle:/root/.kaggle:ro 
+      - ../mlruns:/mlruns                       # ← match mlflow artifact root
+      # OPTIONAL: file-based Kaggle creds:
+      # - ../.kaggle:/home/airflow/.kaggle:ro
+      # OPTIONAL: local logs
+      # - ../logs:/opt/airflow/logs
     depends_on:
       postgres:
         condition: service_healthy
@@ -121,13 +133,16 @@ services:
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - CONFIG_PATH=/app/config.yaml
+      # Kaggle via env vars (if FastAPI needs Kaggle)
+      - KAGGLE_USERNAME=${KAGGLE_USERNAME}
+      - KAGGLE_KEY=${KAGGLE_KEY}
     ports:
       - "8000:8000"
     volumes:
       - ../src:/app/src
       - ../config.yaml:/app/config.yaml:ro
-      # Mount Kaggle credentials if you need Kaggle access inside FastAPI
-      - ../.kaggle:/root/.kaggle:ro 
+      # OPTIONAL: file-based Kaggle creds
+      # - ../.kaggle:/root/.kaggle:ro
     depends_on:
       mlflow:
         condition: service_healthy
