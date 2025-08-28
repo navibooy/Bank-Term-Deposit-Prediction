@@ -49,10 +49,8 @@ data:
 
 # MLflow configuration
 mlflow:
-  tracking_uri: 'http://localhost:5000'
+  tracking_uri: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}   # default for Docker network
   experiment_name: 'bank-marketing-catboost'
-
-  # Artifact logging
   log_artifacts: true
   log_shap_plots: true
   log_feature_importance: true
