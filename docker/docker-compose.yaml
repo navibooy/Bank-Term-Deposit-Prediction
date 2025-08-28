@@ -21,24 +21,66 @@ services:
       - "5000:5000"
     restart: unless-stopped
 
-  airflow:
+  postgres:
+    image: postgres:14
+    container_name: airflow-postgres
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  airflow-webserver:
     build:
       context: ..                       # project root
       dockerfile: docker/airflow.Dockerfile
-    container_name: airflow
+    container_name: airflow-webserver
     environment:
-      - MLFLOW_TRACKING_URI=http://mlflow:5000
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
-    ports:
-      - "8081:8080"                     # Airflow UI
+      - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
     volumes:
       - ../dags:/opt/airflow/dags
       - ../data:/opt/airflow/data
       - ../reports:/opt/airflow/reports
-      - ../src:/opt/airflow/src         # project code for DAGs
+      - ../src:/opt/airflow/src
+    ports:
+      - "8081:8080"
     depends_on:
       - mlflow
+      - postgres
     restart: unless-stopped
+    command: >
+      bash -lc "
+      airflow db upgrade || airflow db init;
+      airflow users create --username admin --firstname Admin --lastname User
+        --role Admin --email admin@example.com --password admin || true;
+      exec airflow webserver
+      "
+
+  airflow-scheduler:
+    build:
+      context: ..
+      dockerfile: docker/airflow.Dockerfile
+    container_name: airflow-scheduler
+    environment:
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    volumes:
+      - ../dags:/opt/airflow/dags
+      - ../data:/opt/airflow/data
+      - ../reports:/opt/airflow/reports
+      - ../src:/opt/airflow/src
+    depends_on:
+      - airflow-webserver
+      - postgres
+    restart: unless-stopped
+    command: >
+      bash -lc "exec airflow scheduler"
 
   fastapi:
     build:
@@ -55,3 +97,6 @@ services:
     depends_on:
       - mlflow
     restart: unless-stopped
+
+volumes:
+  postgres_data:

@@ -5,14 +5,17 @@ RUN useradd -m -u 1000 fastapiuser
 
 WORKDIR /app
 
-# Install uv (as root, system-wide)
+# Install uv (dependency manager)
 RUN pip install --no-cache-dir uv
 
 # Copy dependency files first for layer caching
 COPY pyproject.toml uv.lock ./
 
-# Install all project dependencies into the image
+# Install dependencies into .venv
 RUN uv sync --no-dev --frozen
+
+# Add .venv/bin to PATH so uvicorn & deps are visible
+ENV PATH="/app/.venv/bin:$PATH"
 
 # Make sure app files belong to non-root user
 RUN chown -R fastapiuser:fastapiuser /app
@@ -27,4 +30,4 @@ ENV PYTHONPATH="/app:${PYTHONPATH}"
 EXPOSE 8000
 
 # Start FastAPI server
-CMD ["python", "-m", "uvicorn", "src.serve.app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "src.serve.app:app", "--host", "0.0.0.0", "--port", "8000"]
