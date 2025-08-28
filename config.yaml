@@ -224,18 +224,10 @@ environment:
 
 # Deployment configuration
 deployment:
-  model_registry:
-    champion_model_name: 'bank-marketing-champion'
-    challenger_model_name: 'bank-marketing-challenger'
-
-  promotion_criteria:
-    min_accuracy_improvement: 0.02
-    min_auc_improvement: 0.01
-    max_performance_degradation: 0.05
-
-  api_reload:
-    enabled: true
-    reload_endpoint: 'http://fastapi:8000/reload'
+  model_name: "bank_champion_model"
+  fastapi_url: "http://fastapi:8000"
+  promotion_thresholds:
+    roc_auc_score: 0.95
 
 # Monitoring configuration
 monitoring:
