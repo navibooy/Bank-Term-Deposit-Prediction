@@ -1,9 +1,7 @@
-version: "3.9"
-
 services:
   mlflow:
     build:
-      context: ..                       # project root
+      context: ..          # project root
       dockerfile: docker/mlflow.Dockerfile
     container_name: mlflow
     environment:
@@ -16,9 +14,16 @@ services:
       --backend-store-uri sqlite:////mlruns/mlflow.db
       --default-artifact-root /mlruns
     volumes:
-      - ../mlruns:/mlruns               # maps project-root/mlruns into container
+      - ../mlruns:/mlruns
     ports:
       - "5000:5000"
+    healthcheck:
+      # Use Python so we don't rely on curl existing in the image
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/'); print('ok')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
     restart: unless-stopped
 
   postgres:
@@ -31,27 +36,45 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow -d airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   airflow-webserver:
     build:
-      context: ..                       # project root
+      context: ..          # project root
       dockerfile: docker/airflow.Dockerfile
     container_name: airflow-webserver
     environment:
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      # shared secrets (same in scheduler)
+      - AIRFLOW__WEBSERVER__SECRET_KEY=super-secret-please-change-me
+      - AIRFLOW__CORE__FERNET_KEY=R8o2e1uF8C2e0b8lT1s6t4m3X9o2Y3q5c6m0a1Z2b3Q=
+      # integrations
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+      # config path for your code (and we also mount into /opt/airflow/dags below)
+      - CONFIG_PATH=/opt/airflow/config.yaml
     volumes:
       - ../dags:/opt/airflow/dags
       - ../data:/opt/airflow/data
       - ../reports:/opt/airflow/reports
       - ../src:/opt/airflow/src
+      # mount config in TWO places: your code can read CONFIG_PATH and
+      # any code that uses plain "config.yaml" from DAGS_FOLDER will also find it
+      - ../config.yaml:/opt/airflow/config.yaml:ro
+      - ../config.yaml:/opt/airflow/dags/config.yaml:ro
     ports:
       - "8081:8080"
     depends_on:
-      - mlflow
-      - postgres
+      postgres:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
     restart: unless-stopped
     command: >
       bash -lc "
@@ -63,39 +86,52 @@ services:
 
   airflow-scheduler:
     build:
-      context: ..
+      context: ..          # project root
       dockerfile: docker/airflow.Dockerfile
     container_name: airflow-scheduler
     environment:
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      # same secrets as webserver
+      - AIRFLOW__WEBSERVER__SECRET_KEY=super-secret-please-change-me
+      - AIRFLOW__CORE__FERNET_KEY=R8o2e1uF8C2e0b8lT1s6t4m3X9o2Y3q5c6m0a1Z2b3Q=
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - CONFIG_PATH=/opt/airflow/config.yaml
     volumes:
       - ../dags:/opt/airflow/dags
       - ../data:/opt/airflow/data
       - ../reports:/opt/airflow/reports
       - ../src:/opt/airflow/src
+      - ../config.yaml:/opt/airflow/config.yaml:ro
+      - ../config.yaml:/opt/airflow/dags/config.yaml:ro
     depends_on:
-      - airflow-webserver
-      - postgres
+      postgres:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+      airflow-webserver:
+        condition: service_started
     restart: unless-stopped
     command: >
       bash -lc "exec airflow scheduler"
 
   fastapi:
     build:
-      context: ..                       # project root
+      context: ..          # project root
       dockerfile: docker/fastapi.Dockerfile
     container_name: fastapi
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - CONFIG_PATH=/app/config.yaml
     ports:
-      - "8000:8000"                     # FastAPI API
+      - "8000:8000"
     volumes:
       - ../src:/app/src
       - ../config.yaml:/app/config.yaml:ro
     depends_on:
-      - mlflow
+      mlflow:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

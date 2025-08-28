@@ -21,11 +21,11 @@ RUN pip install --user --no-cache-dir \
     kaggle==1.7.4.5 \
     matplotlib==3.10.5 \
     mlflow==3.3.1 \
-    numpy==1.26.4 \        # 👈 downgrade to 1.26.x
-    pandas==2.2.2 \        # 👈 match numpy compat (2.3.2 expects NumPy 2.x)
-    scikit-learn==1.5.2 \  # 👈 latest stable w/ NumPy 1.26.x
+    numpy==1.26.4 \        
+    pandas==2.2.2 \        
+    scikit-learn==1.5.2 \ 
     seaborn==0.13.2 \
-    shap==0.45.1 \         # 👈 also stick to <0.46 for numpy 1.x
+    shap==0.45.1 \       
     pyyaml
 
 # Optional: avoid Airflow example DAGs
