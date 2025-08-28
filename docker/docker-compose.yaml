@@ -142,7 +142,8 @@ services:
       - ../src:/app/src
       - ../config.yaml:/app/config.yaml:ro
       # OPTIONAL: file-based Kaggle creds
-      # - ../.kaggle:/root/.kaggle:ro
+      - ../.kaggle:/root/.kaggle:ro
+      - ../mlruns:/mlruns
     depends_on:
       mlflow:
         condition: service_healthy
