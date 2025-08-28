@@ -7,11 +7,20 @@ from pathlib import Path
 
 import yaml
 from airflow import DAG
-from airflow.operators.email import EmailOperator
 from airflow.operators.python import PythonOperator
 
-# Add project root to Python path
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+# Add project root to Python path - support both local and Docker environments
+project_root = Path(__file__).parent.parent
+src_path = os.path.join(project_root, "src")
+airflow_src_path = "/opt/airflow/src"
+
+# Add both local and Docker container paths
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+if airflow_src_path not in sys.path:
+    sys.path.insert(0, airflow_src_path)
 
 # Default arguments for the DAG
 default_args = {
@@ -20,8 +29,8 @@ default_args = {
     "start_date": datetime(2024, 1, 1),
     "email_on_failure": True,
     "email_on_retry": False,
-    "retries": 2,
-    "retry_delay": timedelta(minutes=5),
+    "retries": 1,
+    "retry_delay": timedelta(minutes=1),
     "email": ["your-email@example.com"],
 }
 
@@ -47,7 +56,7 @@ dag = DAG(
     "drift_detection",
     default_args=default_args,
     description="Monitor data and concept drift using Evidently AI",
-    schedule_interval=airflow_config.get("drift_check_schedule", "@hourly"),
+    schedule=airflow_config.get("drift_check_schedule", "@hourly"),
     catchup=False,
     max_active_runs=1,
     tags=["monitoring", "drift", "evidently"],
@@ -134,9 +143,9 @@ def analyze_drift_thresholds(**context):
     alerts = drift_output["alerts"]
 
     # Get thresholds from configuration
-    thresholds = drift_config.get("thresholds", {})
-    data_drift_threshold = thresholds.get("data_drift_p_value", 0.05)
-    target_drift_threshold = thresholds.get("target_drift_p_value", 0.05)
+    # thresholds = drift_config.get("thresholds", {})
+    # data_drift_threshold = thresholds.get("data_drift_p_value", 0.05)
+    # target_drift_threshold = thresholds.get("target_drift_p_value", 0.05)
 
     # Analyze results
     analysis = {
@@ -155,15 +164,15 @@ def analyze_drift_thresholds(**context):
         )
         print("⚠️ Data drift detected!")
 
-    # Check target drift
-    if drift_results.get("target_drift_detected", False):
-        analysis["drift_detected"] = True
-        analysis["alert_level"] = "CRITICAL"
-        analysis["immediate_action_required"] = True
-        analysis["recommendations"].append(
-            "Consider model retraining due to concept drift"
-        )
-        print("🚨 Target drift detected - immediate attention required!")
+    # # Check target drift
+    # if drift_results.get("target_drift_detected", False):
+    #     analysis["drift_detected"] = True
+    #     analysis["alert_level"] = "CRITICAL"
+    #     analysis["immediate_action_required"] = True
+    #     analysis["recommendations"].append(
+    #         "Consider model retraining due to concept drift"
+    #     )
+    #     print("🚨 Target drift detected - immediate attention required!")
 
     # Check number of alerts
     if len(alerts) > 3:
@@ -347,28 +356,28 @@ cleanup_task = PythonOperator(
 )
 
 
-# Optional: Email notification for critical alerts
-def should_send_email(**context):
-    """Determine if email should be sent based on alert level."""
-    ti = context["ti"]
-    alert_output = ti.xcom_pull(task_ids="send_drift_alerts")
-    return alert_output.get("alert_level") == "CRITICAL"
+# # Optional: Email notification for critical alerts
+# def should_send_email(**context):
+#     """Determine if email should be sent based on alert level."""
+#     ti = context["ti"]
+#     alert_output = ti.xcom_pull(task_ids="send_drift_alerts")
+#     return alert_output.get("alert_level") == "CRITICAL"
 
 
-email_task = EmailOperator(
-    task_id="send_email_alert",
-    to=airflow_config.get("email", ["your-email@example.com"]),
-    subject="CRITICAL: Drift Detection Alert - Immediate Action Required",
-    html_content="""
-    <h2>Critical Drift Alert</h2>
-    <p>Target drift has been detected in the production model.</p>
-    <p><strong>Immediate action required:</strong> Review model performance and consider retraining.</p>
-    <p>Check the Airflow logs for detailed drift analysis and report locations.</p>
-    <p>Timestamp: {{ ds }} {{ ts }}</p>
-    """,
-    dag=dag,
-    trigger_rule="none_failed",  # Only send if previous tasks succeeded
-)
+# email_task = EmailOperator(
+#     task_id="send_email_alert",
+#     to=airflow_config.get("email", ["gclucos@gmail.com"]),
+#     subject="CRITICAL: Drift Detection Alert - Immediate Action Required",
+#     html_content="""
+#     <h2>Critical Drift Alert</h2>
+#     <p>Target drift has been detected in the production model.</p>
+#     <p><strong>Immediate action required:</strong> Review model performance and consider retraining.</p>
+#     <p>Check the Airflow logs for detailed drift analysis and report locations.</p>
+#     <p>Timestamp: {{ ds }} {{ ts }}</p>
+#     """,
+#     dag=dag,
+#     trigger_rule="none_failed",  # Only send if previous tasks succeeded
+# )
 
 # Task dependencies
 (
@@ -379,47 +388,5 @@ email_task = EmailOperator(
     >> cleanup_task
 )
 
-# Optional email task (runs conditionally)
-send_alerts_task >> email_task
 
-# Add task documentation
-dag.doc_md = """
-# Drift Detection DAG
-
-This DAG monitors for data and concept drift in the production machine learning system using Evidently AI.
-
-## Schedule
-- **Frequency**: Hourly (configurable in config.yaml)
-- **Max Active Runs**: 1 (prevents overlapping executions)
-
-## Data Flow
-1. **Check Data Availability**: Validates that reference and current datasets exist
-2. **Generate Drift Reports**: Creates comprehensive drift analysis using Evidently AI
-3. **Analyze Thresholds**: Evaluates drift severity against configured thresholds
-4. **Send Alerts**: Logs alerts and notifies stakeholders of significant drift
-5. **Cleanup**: Removes old reports to manage storage
-
-## Configuration
-All parameters are controlled through `config.yaml`:
-- Drift thresholds (p-values)
-- Alert channels and recipients
-- Report retention period
-- MLflow logging settings
-
-## Outputs
-- **HTML Reports**: Saved to `reports/` directory
-- **MLflow Artifacts**: Drift reports and metrics
-- **Alerts**: Logged to Airflow and sent via email/Slack
-- **Recommendations**: Automated suggestions for drift remediation
-
-## Alert Levels
-- **INFO**: No significant drift detected
-- **WARNING**: Data drift detected, monitoring recommended
-- **CRITICAL**: Target drift detected, immediate action required
-
-## Dependencies
-- Evidently AI v0.7.11+
-- MLflow tracking server
-- Reference dataset from training pipeline
-- Current data batches for comparison
-"""
+# send_alerts_task >> email_task

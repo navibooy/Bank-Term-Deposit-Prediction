@@ -80,7 +80,7 @@ airflow:
   # Email alerts (optional)
   email_on_failure: false
   email_on_retry: false
-  email: ['your-email@example.com']
+  email: ['gclucos@gmail.com']
 
 # Comprehensive Drift Detection Configuration
 drift:

@@ -1,31 +1,42 @@
 import logging
+
+# Add project root to Python path for Airflow
+import os
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict
 
+import pendulum
 from airflow import DAG
 from airflow.exceptions import AirflowException
 from airflow.operators.python import PythonOperator
-from airflow.utils.dates import days_ago
 
-# Add project root to Python path for Airflow
 project_root = Path(__file__).parent.parent
+src_path = os.path.join(project_root, "src")
+airflow_src_path = "/opt/airflow/src"
+
+# Add both local and Docker container paths
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+if airflow_src_path not in sys.path:
+    sys.path.insert(0, airflow_src_path)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 DAG_ID = "training_pipeline"
+START_DATE = pendulum.datetime(2025, 8, 27, tz="Asia/Manila")
 DEFAULT_ARGS = {
     "owner": "mlops-team",
     "depends_on_past": False,
-    "start_date": days_ago(1),
+    "start_date": START_DATE,
     "email_on_failure": False,
     "email_on_retry": False,
-    "retries": 2,
-    "retry_delay": timedelta(minutes=5),
+    "retries": 1,
+    "retry_delay": timedelta(minutes=1),
     "catchup": False,
 }
 
@@ -34,7 +45,7 @@ dag = DAG(
     DAG_ID,
     default_args=DEFAULT_ARGS,
     description="ML Training Pipeline",
-    schedule_interval="@daily",
+    schedule="@daily",
     max_active_runs=1,
     tags=["ml", "training", "catboost", "bank-marketing"],
 )
@@ -168,11 +179,19 @@ def model_training_task(**context) -> Dict[str, Any]:
         training_results = train_catboost_model()
 
         # Prepare standardized XCom response aligned with train_catboost_model output
+        best_score = training_results.get("best_score", {})
+        # Extract AUC score if available, otherwise use the full score dict
+        score_value = (
+            best_score.get("validation", {}).get("AUC", best_score)
+            if isinstance(best_score, dict)
+            else best_score
+        )
+
         training_result = {
             "status": training_results["status"],
             "model_path": training_results["saved_paths"]["final_model_pkl"],
             "best_iteration": training_results["best_iteration"],
-            "best_score": training_results["best_score"],
+            "best_score": score_value,
             "training_data_shape": list(training_results["training_data_shape"]),
             "test_data_shape": list(training_results["test_data_shape"]),
             "timestamp": datetime.now().isoformat(),
@@ -217,6 +236,12 @@ def model_validation_task(**context) -> Dict[str, Any]:
         metrics = validation_results["metrics"]
         validation_checks = validation_results["validation_results"]
 
+        # Convert PosixPath objects to strings for XCom serialization
+        plot_paths_serializable = {
+            plot_name: str(plot_path) if plot_path else None
+            for plot_name, plot_path in validation_results["plot_paths"].items()
+        }
+
         validation_result = {
             "status": "success",
             "model_path": model_path,
@@ -226,7 +251,7 @@ def model_validation_task(**context) -> Dict[str, Any]:
             "f1_score": metrics["f1_score"],
             "validation_passed": all(validation_checks.values()),
             "validation_details": validation_checks,
-            "plot_paths": validation_results["plot_paths"],
+            "plot_paths": plot_paths_serializable,
             "timestamp": datetime.now().isoformat(),
             "task": "model_validation",
         }

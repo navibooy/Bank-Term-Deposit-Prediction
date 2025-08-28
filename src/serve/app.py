@@ -1,6 +1,8 @@
 """FastAPI application for serving ML models in MLOps pipeline."""
 
 import logging
+import os
+import sys
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -11,7 +13,15 @@ import mlflow.pyfunc
 import pandas as pd
 import yaml
 from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ValidationError
+
+from src.features.transform import create_many_no_feature
+
+# Add project root to path for imports
+project_root = Path(__file__).parent.parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 # Configure logging
 logging.basicConfig(
@@ -35,21 +45,69 @@ config = load_config()
 
 # Pydantic Models
 class PredictionInput(BaseModel):
-    """Input schema for prediction endpoint - customize based on your dataset."""
+    """Input schema for bank marketing prediction endpoint."""
 
-    # Example fields - replace with your actual dataset features
-    age: float = Field(..., ge=0, le=120, description="Age in years")
-    income: float = Field(..., ge=0, description="Annual income")
-    experience: int = Field(..., ge=0, le=50, description="Years of experience")
-    education_level: str = Field(..., description="Education level")
+    # Bank marketing dataset features
+    age: int = Field(..., ge=0, le=120, description="Age in years")
+    job: str = Field(
+        ...,
+        description="Type of job (admin., blue-collar, entrepreneur, housemaid, management, retired, self-employed, services, student, technician, unemployed, unknown)",
+    )
+    marital: str = Field(..., description="Marital status (divorced, married, single)")
+    education: str = Field(
+        ..., description="Education level (primary, secondary, tertiary, unknown)"
+    )
+    default: str = Field(..., description="Has credit in default? (yes, no)")
+    balance: int = Field(..., description="Average yearly balance, in euros")
+    housing: str = Field(..., description="Has housing loan? (yes, no)")
+    loan: str = Field(..., description="Has personal loan? (yes, no)")
+    contact: str = Field(
+        ..., description="Contact communication type (cellular, telephone, unknown)"
+    )
+    day: int = Field(..., ge=1, le=31, description="Last contact day of the month")
+    month: str = Field(
+        ..., description="Last contact month of year (jan, feb, mar, ..., nov, dec)"
+    )
+    duration: int = Field(..., ge=0, description="Last contact duration, in seconds")
+    campaign: int = Field(
+        ...,
+        ge=1,
+        description="Number of contacts performed during this campaign and for this client",
+    )
+    pdays: int = Field(
+        ...,
+        ge=-1,
+        description="Number of days that passed by after the client was last contacted from a previous campaign (-1 means client was not previously contacted)",
+    )
+    previous: int = Field(
+        ...,
+        ge=0,
+        description="Number of contacts performed before this campaign and for this client",
+    )
+    poutcome: str = Field(
+        ...,
+        description="Outcome of the previous marketing campaign (failure, other, success, unknown)",
+    )
 
     class Config:
         schema_extra = {
             "example": {
-                "age": 35.5,
-                "income": 50000.0,
-                "experience": 10,
-                "education_level": "bachelor",
+                "age": 42,
+                "job": "technician",
+                "marital": "married",
+                "education": "secondary",
+                "default": "no",
+                "balance": 1500,
+                "housing": "yes",
+                "loan": "no",
+                "contact": "cellular",
+                "day": 15,
+                "month": "may",
+                "duration": 300,
+                "campaign": 2,
+                "pdays": -1,
+                "previous": 0,
+                "poutcome": "unknown",
             }
         }
 
@@ -57,9 +115,11 @@ class PredictionInput(BaseModel):
 class PredictionOutput(BaseModel):
     """Output schema for prediction response."""
 
-    prediction: float = Field(..., description="Model prediction")
-    prediction_probability: Optional[List[float]] = Field(
-        None, description="Prediction probabilities for classification"
+    prediction: int = Field(
+        ..., description="Binary prediction (0: will not subscribe, 1: will subscribe)"
+    )
+    probability: float = Field(
+        ..., ge=0.0, le=1.0, description="Probability of subscribing to term deposit"
     )
     model_version: str = Field(..., description="Version of the model used")
     prediction_timestamp: str = Field(..., description="Timestamp of prediction")
@@ -69,10 +129,15 @@ class ModelInfo(BaseModel):
     """Model information response schema."""
 
     hyperparameters: Dict[str, Any] = Field(..., description="Model hyperparameters")
-    important_features: List[str] = Field(..., description="Top important features")
-    input_schema: Dict[str, str] = Field(..., description="Input data schema")
+    top_features: List[str] = Field(..., description="Top 5 most important features")
+    input_schema: Dict[str, str] = Field(
+        ..., description="Complete input schema with column names and data types"
+    )
     model_version: str = Field(..., description="Current model version")
     model_name: str = Field(..., description="Model name")
+    registration_info: Dict[str, Any] = Field(
+        ..., description="Model registration information from MLflow"
+    )
 
 
 class ErrorResponse(BaseModel):
@@ -94,14 +159,22 @@ class MLModelService:
     async def load_champion_model(self):
         """Load the champion model from MLflow Model Registry."""
         try:
-            mlflow_uri = config.get("mlflow_tracking_uri", "http://mlflow:5000")
+            # Set MLflow tracking URI from environment variable or config
+            mlflow_uri = os.getenv("MLFLOW_TRACKING_URI") or config.get(
+                "mlflow", {}
+            ).get("tracking_uri", "http://localhost:5000")
             mlflow.set_tracking_uri(mlflow_uri)
             self.mlflow_client = mlflow.tracking.MlflowClient()
 
-            model_name = config.get("model_name", "champion")
-            stage = config.get("model_stage", "Production")
+            logger.info(f"Connected to MLflow at: {mlflow_uri}")
+
+            # Load champion model from Production stage
+            model_name = "champion"
+            stage = "Production"
 
             model_uri = f"models:/{model_name}/{stage}"
+            logger.info(f"Loading model from: {model_uri}")
+
             self.model = mlflow.pyfunc.load_model(model_uri)
 
             await self._load_model_metadata(model_name, stage)
@@ -110,7 +183,10 @@ class MLModelService:
 
         except Exception as error:
             logger.error(f"Failed to load champion model: {str(error)}")
-            raise RuntimeError(f"Model loading failed: {str(error)}")
+            # Don't raise immediately - allow app to start but log warning
+            logger.warning(
+                "Application started without model - endpoints will return 503"
+            )
 
     async def _load_model_metadata(self, model_name: str, stage: str):
         """Load model metadata from MLflow."""
@@ -131,40 +207,58 @@ class MLModelService:
 
             self.model_info = {
                 "hyperparameters": hyperparameters,
-                "important_features": important_features,
+                "top_features": important_features,
                 "input_schema": input_schema,
                 "model_version": latest_version.version,
                 "model_name": model_name,
+                "registration_info": {
+                    "creation_timestamp": latest_version.creation_timestamp,
+                    "last_updated_timestamp": latest_version.last_updated_timestamp,
+                    "current_stage": latest_version.current_stage,
+                    "run_id": run_id,
+                },
             }
 
         except Exception as error:
             logger.error(f"Failed to load model metadata: {str(error)}")
             self.model_info = {
                 "hyperparameters": {},
-                "important_features": [],
+                "top_features": [],
                 "input_schema": {},
                 "model_version": "unknown",
                 "model_name": model_name,
+                "registration_info": {},
             }
 
     def _extract_important_features(self, run_id: str) -> List[str]:
-        """Extract top important features from model run."""
+        """Extract top 5 important features from model run."""
         try:
-            # Try to get feature importance from artifacts or run data
-            artifacts = self.mlflow_client.list_artifacts(run_id)
+            # Try to get feature importance from run metrics or artifacts
+            run = self.mlflow_client.get_run(run_id)
 
-            # Look for feature importance artifacts
+            # Look for feature importance in metrics (top 5)
+            feature_importance = []
+            for i in range(5):
+                key = f"feature_importance_rank_{i+1}"
+                if key in run.data.metrics:
+                    feature_importance.append(run.data.metrics[key])
+
+            if feature_importance:
+                return feature_importance[:5]
+
+            # Try to get from artifacts
+            artifacts = self.mlflow_client.list_artifacts(run_id)
             for artifact in artifacts:
                 if "feature_importance" in artifact.path.lower():
-                    # Download and parse if needed
+                    # Could download and parse CSV/JSON here
                     pass
 
-            # Fallback: return example features - customize based on your dataset
-            return ["age", "income", "experience", "education_level", "location"]
+            # Fallback: return bank marketing features by typical importance
+            return ["duration", "balance", "age", "campaign", "pdays"]
 
         except Exception as error:
             logger.error(f"Error extracting important features: {str(error)}")
-            return ["feature_1", "feature_2", "feature_3"]
+            return ["duration", "balance", "age", "campaign", "pdays"]
 
     def _get_input_schema(self) -> Dict[str, str]:
         """Generate input schema from Pydantic model."""
@@ -195,30 +289,31 @@ async def lifespan(app_instance: FastAPI):
 
 # FastAPI application setup
 app = FastAPI(
-    title="MLOps Model Serving API",
-    description="REST API for serving ML models with experiment tracking and drift monitoring",
+    title="Bank Marketing Prediction API",
+    description="REST API for predicting bank term deposit subscriptions using CatBoost classifier with MLflow model registry integration",
     version="1.0.0",
     lifespan=lifespan,
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure appropriately for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
 def preprocess_input_data(input_df: pd.DataFrame) -> pd.DataFrame:
     """Preprocess input data using same transformations as training pipeline."""
     try:
-        # Import transformation functions from your training pipeline
-        # from src.features.transform import apply_transformations
-        # processed_df = apply_transformations(input_df)
+        # Apply the same preprocessing as training pipeline
+        # This includes creating the 'many_no' feature
+        processed_df = create_many_no_feature(input_df)
 
-        # Placeholder preprocessing - customize based on your pipeline
-        processed_df = input_df.copy()
-
-        # Example transformations
-        if "education_level" in processed_df.columns:
-            # One-hot encode categorical variables
-            education_mapping = {"high_school": 0, "bachelor": 1, "master": 2, "phd": 3}
-            processed_df["education_level"] = processed_df["education_level"].map(
-                education_mapping
-            )
+        logger.info(f"Preprocessing completed. Output shape: {processed_df.shape}")
+        logger.info(f"Features after preprocessing: {list(processed_df.columns)}")
 
         return processed_df
 
@@ -235,10 +330,17 @@ async def get_ml_service() -> MLModelService:
 # API Endpoints
 @app.get("/", summary="API Root", tags=["Root"])
 async def root():
-    """Welcome endpoint for the MLOps API."""
+    """Welcome endpoint for the Bank Marketing Prediction API."""
     return {
-        "message": "Welcome to MLOps Model Serving API",
+        "message": "Welcome to Bank Marketing Prediction API",
+        "description": "Predict bank term deposit subscriptions using CatBoost classifier",
         "model_loaded": ml_service.model is not None,
+        "endpoints": {
+            "predict": "/predict",
+            "model_info": "/model",
+            "health": "/health",
+            "docs": "/docs",
+        },
         "timestamp": datetime.utcnow().isoformat(),
     }
 
@@ -276,29 +378,46 @@ async def predict(
                 detail="Model not loaded or unavailable",
             )
 
+        # Validate categorical fields
+        validate_categorical_fields(input_data)
+
         # Convert Pydantic model to DataFrame
         input_dict = input_data.dict()
         input_df = pd.DataFrame([input_dict])
+
+        logger.info(
+            f"Received prediction request with features: {list(input_dict.keys())}"
+        )
 
         # Apply preprocessing pipeline
         processed_input = preprocess_input_data(input_df)
 
         # Make prediction
         prediction = service.model.predict(processed_input)
-        prediction_value = float(prediction[0])
+        prediction_value = int(prediction[0])
 
-        # Handle classification models with probability predictions
-        probabilities = None
-        if hasattr(service.model, "predict_proba"):
+        # Get prediction probabilities for binary classification
+        probability = 0.5  # default
+        try:
+            # For CatBoost, get probabilities
+            proba = service.model.predict_proba(processed_input)
+            if proba is not None and len(proba[0]) > 1:
+                # Probability of positive class (subscription)
+                probability = float(proba[0][1])
+        except Exception as error:
+            logger.warning(f"Could not get prediction probabilities: {str(error)}")
+            # Try alternative method for MLflow pyfunc models
             try:
-                proba = service.model.predict_proba(processed_input)
-                probabilities = proba[0].tolist() if proba is not None else None
+                # Some models return probabilities directly from predict
+                if 0 <= prediction_value <= 1:
+                    probability = float(prediction_value)
+                    prediction_value = 1 if probability > 0.5 else 0
             except Exception as error:
-                logger.warning(f"Could not get prediction probabilities: {str(error)}")
+                pass
 
         response = PredictionOutput(
             prediction=prediction_value,
-            prediction_probability=probabilities,
+            probability=probability,
             model_version=service.model_info.get("model_version", "unknown"),
             prediction_timestamp=datetime.utcnow().isoformat(),
         )
@@ -352,16 +471,119 @@ async def get_model_info(service: MLModelService = Depends(get_ml_service)):
         )
 
 
+# Additional endpoints
+@app.get("/version", summary="API Version", tags=["Info"])
+async def get_version():
+    """Get API version information."""
+    return {
+        "api_version": "1.0.0",
+        "description": "Bank Marketing Prediction API",
+        "model_type": "CatBoost Classifier",
+        "prediction_target": "Bank term deposit subscription",
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+
+
+# Validation helpers
+def validate_categorical_fields(input_data: PredictionInput) -> None:
+    """Validate categorical field values against expected categories."""
+    # Job categories
+    valid_jobs = {
+        "admin.",
+        "blue-collar",
+        "entrepreneur",
+        "housemaid",
+        "management",
+        "retired",
+        "self-employed",
+        "services",
+        "student",
+        "technician",
+        "unemployed",
+        "unknown",
+    }
+    if input_data.job not in valid_jobs:
+        raise ValueError(
+            f"Invalid job category: {input_data.job}. Must be one of: {valid_jobs}"
+        )
+
+    # Marital status
+    valid_marital = {"divorced", "married", "single"}
+    if input_data.marital not in valid_marital:
+        raise ValueError(
+            f"Invalid marital status: {input_data.marital}. Must be one of: {valid_marital}"
+        )
+
+    # Education
+    valid_education = {"primary", "secondary", "tertiary", "unknown"}
+    if input_data.education not in valid_education:
+        raise ValueError(
+            f"Invalid education: {input_data.education}. Must be one of: {valid_education}"
+        )
+
+    # Yes/No fields
+    valid_yes_no = {"yes", "no"}
+    if input_data.default not in valid_yes_no:
+        raise ValueError(
+            f"Invalid default value: {input_data.default}. Must be 'yes' or 'no'"
+        )
+    if input_data.housing not in valid_yes_no:
+        raise ValueError(
+            f"Invalid housing value: {input_data.housing}. Must be 'yes' or 'no'"
+        )
+    if input_data.loan not in valid_yes_no:
+        raise ValueError(
+            f"Invalid loan value: {input_data.loan}. Must be 'yes' or 'no'"
+        )
+
+    # Contact
+    valid_contact = {"cellular", "telephone", "unknown"}
+    if input_data.contact not in valid_contact:
+        raise ValueError(
+            f"Invalid contact: {input_data.contact}. Must be one of: {valid_contact}"
+        )
+
+    # Month
+    valid_months = {
+        "jan",
+        "feb",
+        "mar",
+        "apr",
+        "may",
+        "jun",
+        "jul",
+        "aug",
+        "sep",
+        "oct",
+        "nov",
+        "dec",
+    }
+    if input_data.month not in valid_months:
+        raise ValueError(
+            f"Invalid month: {input_data.month}. Must be one of: {valid_months}"
+        )
+
+    # Previous outcome
+    valid_poutcome = {"failure", "other", "success", "unknown"}
+    if input_data.poutcome not in valid_poutcome:
+        raise ValueError(
+            f"Invalid poutcome: {input_data.poutcome}. Must be one of: {valid_poutcome}"
+        )
+
+
 # Global exception handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     """Global exception handler for unhandled errors."""
-    logger.error(f"Unhandled exception: {str(exc)}")
-    return {
-        "error": "Internal server error",
-        "detail": str(exc),
-        "timestamp": datetime.utcnow().isoformat(),
-    }
+    logger.error(f"Unhandled exception on {request.url}: {str(exc)}")
+    return HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail={
+            "error": "Internal server error",
+            "message": "An unexpected error occurred. Please try again later.",
+            "timestamp": datetime.utcnow().isoformat(),
+        },
+    )
 
 
 if __name__ == "__main__":

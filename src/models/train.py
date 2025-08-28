@@ -127,13 +127,14 @@ def train_catboost_model(config_path: str = "config.yaml") -> Dict[str, Any]:
     saved_paths = save_model_artifacts(trained_model, config)
 
     training_results = {
+        "status": "success",  # Add status field for DAG compatibility
         "model": trained_model,
         "saved_paths": saved_paths,
         "config": config,
         "training_data_shape": X_train_str.shape,
         "test_data_shape": X_test_str.shape,
         "best_iteration": trained_model.best_iteration_,
-        # "best_score": float(trained_model.best_score_["validation"]["Accuracy"]),
+        "best_score": trained_model.best_score_,  # Include the full best_score dict
     }
 
     return training_results

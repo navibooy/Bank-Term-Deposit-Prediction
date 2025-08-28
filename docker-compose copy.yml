@@ -1,0 +1,146 @@
+# Docker Compose for Bank Term Deposit Prediction MLOps Pipeline
+
+networks:
+  mlops-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  mlflow_data:
+  airflow_logs:
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: mlops-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    networks:
+      - mlops-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mlflow:
+    build:
+      context: .
+      dockerfile: docker/mlflow.Dockerfile
+    container_name: mlops-mlflow
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      # Postgres backend for runs/registry
+      MLFLOW_BACKEND_STORE_URI: postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow
+      MLFLOW_DEFAULT_ARTIFACT_ROOT: /mlruns
+      MLFLOW_TRACKING_URI: http://0.0.0.0:5000
+    volumes:
+      - ./mlruns:/mlruns
+      - ./mlartifacts:/mlartifacts
+      - ./data:/app/data
+      - ./models:/app/models
+    networks:
+      - mlops-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: docker/airflow.Dockerfile
+    container_name: mlops-airflow-webserver
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      AIRFLOW_HOME: /opt/airflow
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      AIRFLOW__CORE__FERNET_KEY: 46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'true'
+      # Fast imports for your project code
+      PYTHONPATH: /opt/airflow/src
+      # Known admin credentials (so you know the login)
+      _AIRFLOW_WWW_USER_USERNAME: admin
+      _AIRFLOW_WWW_USER_PASSWORD: admin
+      _AIRFLOW_WWW_USER_FIRSTNAME: Admin
+      _AIRFLOW_WWW_USER_LASTNAME: User
+      _AIRFLOW_WWW_USER_EMAIL: admin@example.com
+      # MLflow
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    volumes:
+      # IMPORTANT: mount dags and source so Airflow can import operators and call your scripts
+      - ./dags:/opt/airflow/dags
+      - ./src:/opt/airflow/src
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./mlruns:/mlruns
+      - ./mlartifacts:/mlartifacts
+      - ./reports:/app/reports
+      - airflow_logs:/opt/airflow/logs
+    networks:
+      - mlops-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+    # Keep your current "standalone" pattern but ensure a user exists even if env auto-create is skipped
+    command: >
+      bash -c "
+        airflow db migrate &&
+        airflow users create --username ${_AIRFLOW_WWW_USER_USERNAME} --firstname ${_AIRFLOW_WWW_USER_FIRSTNAME} --lastname ${_AIRFLOW_WWW_USER_LASTNAME} --role Admin --email ${_AIRFLOW_WWW_USER_EMAIL} --password ${_AIRFLOW_WWW_USER_PASSWORD} || true &&
+        airflow standalone
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+      start_period: 60s
+
+  fastapi:
+    build:
+      context: .
+      dockerfile: docker/fastapi.Dockerfile
+    container_name: mlops-fastapi
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      PYTHONPATH: /app
+      PYTHONUNBUFFERED: 1
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./mlruns:/mlruns
+      - ./mlartifacts:/mlartifacts
+    networks:
+      - mlops-network
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

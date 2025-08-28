@@ -473,6 +473,7 @@ def main():
     # Example usage
     reference_path = "data/reference/reference.parquet"
     current_path = "data/current/severe_data_drift.parquet"
+    # current_path = "data/current/concept_drift.parquet"
     target_column = "y"
 
     try:

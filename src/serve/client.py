@@ -1,4 +1,4 @@
-"""Client code for testing MLOps FastAPI endpoints."""
+"""Client code for testing Bank Marketing Prediction API endpoints."""
 
 import logging
 
@@ -50,7 +50,7 @@ def test_model_info():
             logger.info(f"  Model Name: {model_info.get('model_name')}")
             logger.info(f"  Model Version: {model_info.get('model_version')}")
             logger.info(f"  Hyperparameters: {model_info.get('hyperparameters')}")
-            logger.info(f"  Important Features: {model_info.get('important_features')}")
+            logger.info(f"  Top Features: {model_info.get('top_features')}")
             logger.info(f"  Input Schema: {model_info.get('input_schema')}")
         else:
             logger.warning(f"Model info unavailable: {response.json()}")
@@ -68,10 +68,22 @@ def test_prediction_valid_input():
     """Test prediction endpoint with valid input."""
     try:
         prediction_data = {
-            "age": 35.5,
-            "income": 75000.0,
-            "experience": 12,
-            "education_level": "bachelor",
+            "age": 42,
+            "job": "technician",
+            "marital": "married",
+            "education": "secondary",
+            "default": "no",
+            "balance": 1500,
+            "housing": "yes",
+            "loan": "no",
+            "contact": "cellular",
+            "day": 15,
+            "month": "may",
+            "duration": 300,
+            "campaign": 2,
+            "pdays": -1,
+            "previous": 0,
+            "poutcome": "unknown",
         }
 
         response = requests.post(
@@ -85,13 +97,12 @@ def test_prediction_valid_input():
         if response.status_code == 200:
             prediction_result = response.json()
             logger.info("Prediction Result:")
-            logger.info(f"  Prediction: {prediction_result.get('prediction')}")
+            logger.info(
+                f"  Prediction: {prediction_result.get('prediction')} (0=No subscription, 1=Will subscribe)"
+            )
+            logger.info(f"  Probability: {prediction_result.get('probability'):.4f}")
             logger.info(f"  Model Version: {prediction_result.get('model_version')}")
             logger.info(f"  Timestamp: {prediction_result.get('prediction_timestamp')}")
-
-            probabilities = prediction_result.get("prediction_probability")
-            if probabilities:
-                logger.info(f"  Probabilities: {probabilities}")
         else:
             logger.warning(f"Prediction failed: {response.json()}")
 
@@ -106,9 +117,21 @@ def test_prediction_invalid_input():
     try:
         invalid_data = {
             "age": -5,  # Invalid age
-            "income": "not_a_number",  # Invalid income type
-            "experience": 100,  # Invalid experience
-            "education_level": "invalid_level",  # Valid format but may cause processing issues
+            "job": "invalid_job",  # Invalid job type
+            "marital": "complicated",  # Invalid marital status
+            "education": "phd_in_life",  # Invalid education
+            "default": "maybe",  # Invalid default value
+            "balance": "lots",  # Invalid balance type
+            "housing": "yes",
+            "loan": "no",
+            "contact": "telepathy",  # Invalid contact type
+            "day": 35,  # Invalid day
+            "month": "mayan_calendar",  # Invalid month
+            "duration": -100,  # Invalid duration
+            "campaign": 0,  # Invalid campaign
+            "pdays": -2,  # Invalid pdays
+            "previous": -1,  # Invalid previous
+            "poutcome": "maybe_success",  # Invalid poutcome
         }
 
         response = requests.post(
@@ -135,9 +158,9 @@ def test_prediction_missing_fields():
     """Test prediction endpoint with missing required fields."""
     try:
         incomplete_data = {
-            "age": 30.0,
-            "income": 50000.0,
-            # Missing experience and education_level
+            "age": 30,
+            "job": "admin.",
+            # Missing many required fields like marital, education, etc.
         }
 
         response = requests.post(
@@ -187,7 +210,7 @@ def run_comprehensive_tests():
     ]
 
     results = {}
-    logger.info("=== Starting MLOps FastAPI Comprehensive Tests ===")
+    logger.info("=== Starting Bank Marketing Prediction API Comprehensive Tests ===")
 
     for test_name, test_function in tests:
         logger.info(f"\n--- Testing: {test_name} ---")
@@ -213,7 +236,7 @@ def run_comprehensive_tests():
 
 def demo_happy_path():
     """Demonstrate the happy path usage of the API."""
-    logger.info("\n=== MLOps API Happy Path Demo ===")
+    logger.info("\n=== Bank Marketing Prediction API Happy Path Demo ===")
 
     # Check API status
     logger.info("1. Checking API status...")
@@ -231,36 +254,72 @@ def demo_happy_path():
         logger.info(
             f"Model: {model_info.get('model_name')} v{model_info.get('model_version')}"
         )
-        logger.info(f"Key Features: {model_info.get('important_features')[:3]}...")
+        logger.info(f"Key Features: {model_info.get('top_features', [])[:3]}...")
 
     # Make predictions
     logger.info("\n3. Making sample predictions...")
     sample_cases = [
         {
-            "case": "Young Graduate",
+            "case": "Young Student",
             "data": {
-                "age": 25.0,
-                "income": 45000.0,
-                "experience": 2,
-                "education_level": "bachelor",
+                "age": 23,
+                "job": "student",
+                "marital": "single",
+                "education": "secondary",
+                "default": "no",
+                "balance": 200,
+                "housing": "no",
+                "loan": "yes",
+                "contact": "cellular",
+                "day": 10,
+                "month": "apr",
+                "duration": 150,
+                "campaign": 1,
+                "pdays": -1,
+                "previous": 0,
+                "poutcome": "unknown",
             },
         },
         {
-            "case": "Experienced Professional",
+            "case": "Middle-aged Manager",
             "data": {
-                "age": 45.0,
-                "income": 95000.0,
-                "experience": 20,
-                "education_level": "master",
+                "age": 45,
+                "job": "management",
+                "marital": "married",
+                "education": "tertiary",
+                "default": "no",
+                "balance": 5000,
+                "housing": "yes",
+                "loan": "no",
+                "contact": "cellular",
+                "day": 20,
+                "month": "jun",
+                "duration": 400,
+                "campaign": 3,
+                "pdays": 180,
+                "previous": 2,
+                "poutcome": "success",
             },
         },
         {
-            "case": "Senior Executive",
+            "case": "Retired Person",
             "data": {
-                "age": 55.0,
-                "income": 150000.0,
-                "experience": 30,
-                "education_level": "master",
+                "age": 67,
+                "job": "retired",
+                "marital": "married",
+                "education": "primary",
+                "default": "no",
+                "balance": 3500,
+                "housing": "yes",
+                "loan": "no",
+                "contact": "telephone",
+                "day": 5,
+                "month": "nov",
+                "duration": 800,
+                "campaign": 1,
+                "pdays": -1,
+                "previous": 0,
+                "poutcome": "unknown",
             },
         },
     ]
@@ -272,11 +331,12 @@ def demo_happy_path():
         if pred_response.status_code == 200:
             prediction = pred_response.json()
             logger.info(f"  Input: {sample['data']}")
-            logger.info(f"  Prediction: {prediction.get('prediction')}")
-            if prediction.get("prediction_probability"):
-                logger.info(
-                    f"  Probabilities: {prediction.get('prediction_probability')}"
-                )
+            logger.info(f"  Prediction: {prediction.get('prediction')} (0=No, 1=Yes)")
+            logger.info(
+                f"  Probability: {prediction.get('probability', 'N/A'):.4f}"
+                if prediction.get("probability") is not None
+                else "  Probability: N/A"
+            )
         else:
             logger.warning(f"  Prediction failed: {pred_response.status_code}")
 
@@ -292,4 +352,7 @@ if __name__ == "__main__":
         logger.error(
             "Basic connectivity failed. Check if the FastAPI server is running."
         )
-        logger.info("Start the server with: uvicorn src.serve.app:app --reload")
+        logger.info("Start the server with: uv run python src/serve/app.py")
+        logger.info(
+            "Or with uvicorn: uv run uvicorn src.serve.app:app --host 0.0.0.0 --port 8000 --reload"
+        )

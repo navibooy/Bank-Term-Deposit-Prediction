@@ -48,30 +48,43 @@ def load_config(config_path: str = "config.yaml") -> Dict[str, Any]:
         raise
 
 
-def setup_mlflow(config: Dict[str, Any]) -> None:
-    """Setup MLflow tracking."""
+def setup_mlflow(config: Dict[str, Any]) -> bool:
+    """Setup MLflow tracking. Returns True if successful, False otherwise."""
     mlflow_config = config["mlflow"]
 
-    # Set tracking URI
-    mlflow.set_tracking_uri(mlflow_config["tracking_uri"])
-    logger.info(f"MLflow tracking URI: {mlflow_config['tracking_uri']}")
+    # Try multiple tracking URIs for container/local compatibility
+    tracking_uris = [
+        mlflow_config["tracking_uri"],  # From config (usually localhost:5000)
+        "http://mlflow:5000",  # Docker container name
+        "http://localhost:5000",  # Fallback to localhost
+    ]
 
-    # Set experiment
-    experiment_name = mlflow_config["experiment_name"]
-    try:
-        experiment = mlflow.get_experiment_by_name(experiment_name)
-        if experiment is None:
-            mlflow.create_experiment(experiment_name)
-            logger.info(f"Created new MLflow experiment: {experiment_name}")
-        else:
-            experiment.experiment_id
-            logger.info(f"Using existing MLflow experiment: {experiment_name}")
+    for uri in tracking_uris:
+        try:
+            mlflow.set_tracking_uri(uri)
+            logger.info(f"Trying MLflow tracking URI: {uri}")
 
-        mlflow.set_experiment(experiment_name)
+            # Test connection by trying to get experiment
+            experiment_name = mlflow_config["experiment_name"]
+            experiment = mlflow.get_experiment_by_name(experiment_name)
 
-    except Exception as error:
-        logger.warning(f"Could not setup MLflow experiment: {error}")
-        logger.info("Proceeding without MLflow logging")
+            if experiment is None:
+                mlflow.create_experiment(experiment_name)
+                logger.info(f"Created new MLflow experiment: {experiment_name}")
+            else:
+                logger.info(f"Using existing MLflow experiment: {experiment_name}")
+
+            mlflow.set_experiment(experiment_name)
+            logger.info(f"✅ MLflow connection successful with URI: {uri}")
+            return True
+
+        except Exception as error:
+            logger.warning(f"Failed to connect to MLflow at {uri}: {error}")
+            continue
+
+    logger.warning("❌ Could not connect to MLflow with any URI")
+    logger.info("Proceeding without MLflow logging - validation will still complete")
+    return False
 
 
 def calculate_classification_metrics(
@@ -335,8 +348,8 @@ def validate_model(
     # Load configuration
     config = load_config(config_path)
 
-    # Setup MLflow
-    setup_mlflow(config)
+    # Setup MLflow (returns True if successful, False otherwise)
+    mlflow_available = setup_mlflow(config)
 
     # Load trained model
     from src.models.train import load_trained_model
@@ -385,8 +398,11 @@ def validate_model(
     # Validate against thresholds
     validation_results = validate_performance_thresholds(metrics, config)
 
-    # Log to MLflow
-    log_to_mlflow(model, metrics, validation_results, plot_paths, config)
+    # Log to MLflow (only if connection was successful)
+    if mlflow_available:
+        log_to_mlflow(model, metrics, validation_results, plot_paths, config)
+    else:
+        logger.info("Skipping MLflow logging due to connection issues")
 
     # Prepare validation summary
     validation_summary = {
