@@ -133,7 +133,7 @@ def train_catboost_model(config_path: str = "config.yaml") -> Dict[str, Any]:
         "training_data_shape": X_train_str.shape,
         "test_data_shape": X_test_str.shape,
         "best_iteration": trained_model.best_iteration_,
-        "best_score": float(trained_model.best_score_["validation"]["Accuracy"]),
+        # "best_score": float(trained_model.best_score_["validation"]["Accuracy"]),
     }
 
     return training_results
