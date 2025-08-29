@@ -306,7 +306,7 @@ async def lifespan(app_instance: FastAPI):
 
 # FastAPI application setup
 app = FastAPI(
-    title="Bank Marketing Prediction API",
+    title="Bank Term Deposit Prediction API",
     description="REST API for predicting bank term deposit subscriptions using CatBoost classifier with MLflow model registry integration",
     version="1.0.0",
     lifespan=lifespan,
@@ -385,7 +385,7 @@ async def get_ml_service() -> MLModelService:
 async def root():
     """Welcome endpoint for the Bank Marketing Prediction API."""
     return {
-        "message": "Welcome to Bank Marketing Prediction API",
+        "message": "Welcome to Bank Term Deposit Prediction API",
         "description": "Predict bank term deposit subscriptions using CatBoost classifier",
         "model_loaded": ml_service.model is not None,
         "endpoints": {
@@ -550,7 +550,7 @@ async def get_version():
     """Get API version information."""
     return {
         "api_version": "1.0.0",
-        "description": "Bank Marketing Prediction API",
+        "description": "Bank Term Deposit Prediction API",
         "model_type": "CatBoost Classifier",
         "prediction_target": "Bank term deposit subscription",
         "timestamp": datetime.utcnow().isoformat(),

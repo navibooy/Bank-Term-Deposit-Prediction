@@ -76,15 +76,12 @@ services:
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'true'
       PYTHONPATH: /opt/airflow/src
-      # Fixed Airflow admin credentials (no ${...} interpolation)
       _AIRFLOW_WWW_USER_USERNAME: admin
       _AIRFLOW_WWW_USER_PASSWORD: admin
       _AIRFLOW_WWW_USER_FIRSTNAME: Admin
       _AIRFLOW_WWW_USER_LASTNAME: User
       _AIRFLOW_WWW_USER_EMAIL: admin@example.com
-      # MLflow inside Airflow tasks
       MLFLOW_TRACKING_URI: http://mlflow:5000
-      # FastAPI admin endpoints for deployment DAG
       FASTAPI_RELOAD_URL: http://fastapi:8000/admin/reload
     volumes:
       - ./dags:/opt/airflow/dags
@@ -128,17 +125,12 @@ services:
       MLFLOW_REGISTRY_URI: http://mlflow:5000
       PYTHONPATH: /app
       PYTHONUNBUFFERED: 1
-      # Model registry configuration
       MODEL_REGISTRY_NAME: champion
       MODEL_REGISTRY_STAGE: Production
-      # Legacy compatibility
       MODEL_NAME: champion
       MODEL_STAGE: Production
-      # MLflow experiment
       MLFLOW_EXPERIMENT_NAME: bank-marketing-catboost
-      # Configuration path
       CONFIG_PATH: /app/config.yaml
-      # Admin endpoints
       FASTAPI_RELOAD_URL: http://fastapi:8000/admin/reload
     volumes:
       - ./data:/app/data
