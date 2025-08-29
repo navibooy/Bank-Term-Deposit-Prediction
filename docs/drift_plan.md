@@ -6,15 +6,11 @@ This document outlines the comprehensive strategy for simulating and detecting d
 
 ## Dataset Suitability for Drift Simulation
 
-### Why Bank Marketing Data is Ideal for Drift Detection
-
 The Bank Marketing dataset is exceptionally well-suited for drift simulation due to its:
 
 1. **Temporal Nature**: Marketing campaigns span multiple months, naturally subject to seasonal variations
 2. **Economic Sensitivity**: Financial features sensitive to market conditions and economic cycles
 3. **Behavioral Components**: Customer behavior patterns that evolve over time
-4. **Mixed Feature Types**: Combination of numerical, categorical, and temporal features
-5. **Real-world Complexity**: Authentic data patterns that reflect genuine business scenarios
 
 ### Feature Categories for Drift Simulation
 
