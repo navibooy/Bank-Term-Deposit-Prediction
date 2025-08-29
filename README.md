@@ -74,10 +74,12 @@ docker-compose logs -f
 
 ### 4. Access Services
 
-- **Airflow**: http://localhost:8080 (admin/admin)
 - **MLflow**: http://localhost:5000
 - **FastAPI**: http://localhost:8000
 - **API Docs**: http://localhost:8000/docs
+- **Airflow**: http://localhost:8080
+- Username: admin
+- Password: Check with: docker logs mlops-airflow-webserver | grep -i "admin" | head -5
 
 ### 5. Trigger Training Pipeline
 
