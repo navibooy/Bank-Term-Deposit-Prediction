@@ -5,6 +5,7 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import pendulum
 import yaml
 from airflow import DAG
 from airflow.operators.python import PythonOperator
@@ -22,15 +23,18 @@ if src_path not in sys.path:
 if airflow_src_path not in sys.path:
     sys.path.insert(0, airflow_src_path)
 
+
+START_DATE = pendulum.datetime(2025, 8, 29, tz="Asia/Manila")
+
 # Default arguments for the DAG
 default_args = {
     "owner": "mlops-team",
     "depends_on_past": False,
-    "start_date": datetime(2024, 1, 1),
+    "start_date": START_DATE,
     "email_on_failure": True,
     "email_on_retry": False,
-    "retries": 1,
-    "retry_delay": timedelta(minutes=1),
+    "retries": 2,
+    "retry_delay": timedelta(minutes=5),
     "email": ["your-email@example.com"],
 }
 
@@ -246,7 +250,7 @@ def send_drift_alerts(**context):
 
 def cleanup_old_reports(**context):
     """Clean up old drift reports to save disk space."""
-    from datetime import datetime, timedelta
+    from datetime import timedelta
     from pathlib import Path
 
     reports_dir = Path("reports")

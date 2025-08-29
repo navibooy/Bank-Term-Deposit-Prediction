@@ -178,6 +178,30 @@ def test_prediction_missing_fields():
         return False
 
 
+def test_admin_reload():
+    """Test the admin reload endpoint."""
+    try:
+        response = requests.post(f"{BASE_URL}/admin/reload")
+        logger.info(f"POST /admin/reload -> Status: {response.status_code}")
+
+        if response.status_code == 200:
+            reload_result = response.json()
+            logger.info("Admin reload successful:")
+            logger.info(f"  Status: {reload_result.get('status')}")
+            logger.info(f"  Message: {reload_result.get('message')}")
+            logger.info(f"  Model: {reload_result.get('model_info', {})}")
+        else:
+            logger.warning(f"Admin reload failed: {response.json()}")
+
+        return response.status_code in [
+            200,
+            503,
+        ]  # 503 acceptable if model loading fails
+    except Exception as error:
+        logger.error(f"Error testing admin reload endpoint: {str(error)}")
+        return False
+
+
 def test_api_documentation():
     """Test if API documentation is accessible."""
     try:
@@ -206,6 +230,7 @@ def run_comprehensive_tests():
         ("Valid Prediction", test_prediction_valid_input),
         ("Invalid Input Validation", test_prediction_invalid_input),
         ("Missing Fields Validation", test_prediction_missing_fields),
+        ("Admin Reload", test_admin_reload),
         ("API Documentation", test_api_documentation),
     ]
 

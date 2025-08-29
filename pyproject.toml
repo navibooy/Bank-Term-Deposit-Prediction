@@ -11,6 +11,8 @@ requires-python = ">=3.10"
 dependencies = [
     "apache-airflow==3.0.4",
     "catboost==1.2.8",
+    "certifi>=2023.0.0",
+    "charset-normalizer>=3.0.0",
     "evidently==0.7.11",
     "fastapi==0.116.1",
     "kaggle==1.7.4.5",
@@ -18,9 +20,13 @@ dependencies = [
     "mlflow==3.3.1",
     "numpy==2.2.6",
     "pandas==2.3.2",
+    "requests>=2.28.0",
     "scikit-learn==1.7.1",
     "seaborn==0.13.2",
     "shap==0.48.0",
+    "uvicorn>=0.20.0",
+    "pydantic>=2.0.0",
+    "pyyaml>=6.0.0",
 ]
 
 [tool.setuptools.packages.find]

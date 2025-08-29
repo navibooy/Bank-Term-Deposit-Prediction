@@ -84,6 +84,8 @@ services:
       _AIRFLOW_WWW_USER_EMAIL: admin@example.com
       # MLflow inside Airflow tasks
       MLFLOW_TRACKING_URI: http://mlflow:5000
+      # FastAPI admin endpoints for deployment DAG
+      FASTAPI_RELOAD_URL: http://fastapi:8000/admin/reload
     volumes:
       - ./dags:/opt/airflow/dags
       - ./src:/opt/airflow/src
@@ -123,13 +125,27 @@ services:
       - "8000:8000"
     environment:
       MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_REGISTRY_URI: http://mlflow:5000
       PYTHONPATH: /app
       PYTHONUNBUFFERED: 1
+      # Model registry configuration
+      MODEL_REGISTRY_NAME: champion
+      MODEL_REGISTRY_STAGE: Production
+      # Legacy compatibility
+      MODEL_NAME: champion
+      MODEL_STAGE: Production
+      # MLflow experiment
+      MLFLOW_EXPERIMENT_NAME: bank-marketing-catboost
+      # Configuration path
+      CONFIG_PATH: /app/config.yaml
+      # Admin endpoints
+      FASTAPI_RELOAD_URL: http://fastapi:8000/admin/reload
     volumes:
       - ./data:/app/data
       - ./models:/app/models
       - ./mlruns:/mlruns
       - ./mlartifacts:/mlartifacts
+      - ./config.yaml:/app/config.yaml:ro
     networks:
       - mlops-network
     depends_on:
@@ -138,6 +154,6 @@ services:
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
-      timeout: 10s
+      timeout: 15s
+      start_period: 60s
       retries: 3
-      start_period: 10s

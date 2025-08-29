@@ -296,6 +296,8 @@ source = { editable = "." }
 dependencies = [
     { name = "apache-airflow" },
     { name = "catboost" },
+    { name = "certifi" },
+    { name = "charset-normalizer" },
     { name = "evidently" },
     { name = "fastapi" },
     { name = "kaggle" },
@@ -303,9 +305,13 @@ dependencies = [
     { name = "mlflow" },
     { name = "numpy" },
     { name = "pandas" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+    { name = "requests" },
     { name = "scikit-learn" },
     { name = "seaborn" },
     { name = "shap" },
+    { name = "uvicorn" },
 ]
 
 [package.dev-dependencies]
@@ -318,6 +324,8 @@ dev = [
 requires-dist = [
     { name = "apache-airflow", specifier = "==3.0.4" },
     { name = "catboost", specifier = "==1.2.8" },
+    { name = "certifi", specifier = ">=2023.0.0" },
+    { name = "charset-normalizer", specifier = ">=3.0.0" },
     { name = "evidently", specifier = "==0.7.11" },
     { name = "fastapi", specifier = "==0.116.1" },
     { name = "kaggle", specifier = "==1.7.4.5" },
@@ -325,9 +333,13 @@ requires-dist = [
     { name = "mlflow", specifier = "==3.3.1" },
     { name = "numpy", specifier = "==2.2.6" },
     { name = "pandas", specifier = "==2.3.2" },
+    { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "pyyaml", specifier = ">=6.0.0" },
+    { name = "requests", specifier = ">=2.28.0" },
     { name = "scikit-learn", specifier = "==1.7.1" },
     { name = "seaborn", specifier = "==0.13.2" },
     { name = "shap", specifier = "==0.48.0" },
+    { name = "uvicorn", specifier = ">=0.20.0" },
 ]
 
 [package.metadata.requires-dev]

@@ -11,6 +11,7 @@ import pendulum
 from airflow import DAG
 from airflow.exceptions import AirflowException
 from airflow.operators.python import PythonOperator
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
 project_root = Path(__file__).parent.parent
 src_path = os.path.join(project_root, "src")
@@ -28,7 +29,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 DAG_ID = "training_pipeline"
-START_DATE = pendulum.datetime(2025, 8, 27, tz="Asia/Manila")
+START_DATE = pendulum.datetime(2025, 8, 29, tz="Asia/Manila")
 DEFAULT_ARGS = {
     "owner": "mlops-team",
     "depends_on_past": False,
@@ -425,8 +426,24 @@ model_validation = PythonOperator(
     """,
 )
 
+trigger_deployment = TriggerDagRunOperator(
+    task_id="trigger_deployment",
+    trigger_dag_id="deployment_pipeline",
+    conf={
+        "training_dag_id": "{{ dag.dag_id }}",
+        "training_run_id": "{{ dag_run.run_id }}",
+        "training_logical_date": "{{ dag_run.logical_date.isoformat() }}",
+        "validation_status": "success",
+    },
+    wait_for_completion=False,  # fire-and-forget
+    reset_dag_run=True,  # replace if same logical date exists
+    dag=dag,
+)
+
 # Set task dependencies
 data_ingestion >> data_transformation >> model_training >> model_validation
+
+model_validation >> trigger_deployment
 
 # Add success/failure callbacks to the DAG
 dag.on_success_callback = pipeline_success_callback

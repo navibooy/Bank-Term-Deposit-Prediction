@@ -29,7 +29,11 @@ RUN pip install --no-cache-dir \
     numpy==2.2.6 \
     scikit-learn==1.7.1 \
     catboost==1.2.8 \
-    pyyaml
+    pyyaml \
+    requests>=2.28.0 \
+    certifi>=2023.0.0 \
+    charset-normalizer>=3.0.0 \
+    pydantic>=2.0.0
 
 # Copy source code
 COPY src/ ./src/

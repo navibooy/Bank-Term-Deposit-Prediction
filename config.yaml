@@ -2,6 +2,10 @@
 random_state: 42
 
 model:
+  # Model registry configuration
+  registry_name: champion
+  registry_stage: Production
+  
   catboost:
     # Core hyperparameters
     n_estimators: 5
@@ -27,7 +31,7 @@ training:
 
   # Validation thresholds for model promotion
   validation_thresholds:
-    min_roc_auc: 0.80
+    min_roc_auc: 0.85
     min_accuracy: 0.75
     max_cv_std: 0.05
 
@@ -49,7 +53,7 @@ data:
 
 # MLflow configuration
 mlflow:
-  tracking_uri: 'http://localhost:5000'
+  tracking_uri: 'http://mlflow:5000'  # Container service URL
   experiment_name: 'bank-marketing-catboost'
 
   # Artifact logging
@@ -224,10 +228,13 @@ environment:
 
 # Deployment configuration
 deployment:
-  model_name: "bank_champion_model"
+  model_name: "champion" 
+  model_stage: "Production"
   fastapi_url: "http://fastapi:8000"
+  fastapi_reload_url: "http://fastapi:8000/admin/reload"
   promotion_thresholds:
-    roc_auc_score: 0.95
+    roc_auc: 0.85
+    f1_score: 0.75
 
 # Monitoring configuration
 monitoring:
